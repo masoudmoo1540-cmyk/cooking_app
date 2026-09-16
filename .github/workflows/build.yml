@@ -24,25 +24,71 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
-      - name: Show build.gradle.kts
-        run: cat android/app/build.gradle.kts
+      - name: Patch AndroidManifest permissions
+        run: |
+          python3 - <<'EOF'
+          path = "android/app/src/main/AndroidManifest.xml"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+          
+          permissions = '''    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
+          '''
+          
+          if "SCHEDULE_EXACT_ALARM" not in content:
+              content = content.replace('<manifest', '<manifest', 1)
+              idx = content.find('>')
+              content = content[:idx+1] + '\n' + permissions + content[idx+1:]
+          
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+          print("AndroidManifest patched")
+          print(content)
+          EOF
 
-      - name: Force compileSdk 36
+      - name: Patch build.gradle.kts
         run: |
           python3 - <<'EOF'
           import re
           path = "android/app/build.gradle.kts"
           with open(path, "r", encoding="utf-8") as f:
               content = f.read()
+          
+          # compileSdk = 36
           content = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', content)
-          content = re.sub(r'compileSdkVersion\s*[^\n]+', 'compileSdkVersion 36', content)
+          
+          # minSdk = 21
           content = re.sub(r'minSdk\s*=\s*[^\n]+', 'minSdk = 21', content)
-          content = re.sub(r'minSdkVersion\s*[^\n]+', 'minSdkVersion 21', content)
-          content = re.sub(r'targetSdk\s*=\s*[^\n]+', 'targetSdk = 36', content)
-          content = re.sub(r'targetSdkVersion\s*[^\n]+', 'targetSdkVersion 36', content)
+          
+          # فعال‌سازی core library desugaring
+          if "isCoreLibraryDesugaringEnabled" not in content:
+              content = content.replace(
+                  'android {',
+                  '''android {
+                      compileOptions {
+                          isCoreLibraryDesugaringEnabled = true
+                          sourceCompatibility = JavaVersion.VERSION_17
+                          targetCompatibility = JavaVersion.VERSION_17
+                      }''',
+                  1
+              )
+          
+          # اضافه کردن dependency
+          if "desugar_jdk_libs" not in content:
+              content = content.replace(
+                  'dependencies {',
+                  '''dependencies {
+                      coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")''',
+                  1
+              )
+          
           with open(path, "w", encoding="utf-8") as f:
               f.write(content)
-          print("=== AFTER ===")
+          print("build.gradle.kts patched")
           print(content)
           EOF
 

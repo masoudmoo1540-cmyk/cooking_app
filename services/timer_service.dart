@@ -1,9 +1,47 @@
-import 'package:alarm2/alarm2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class TimerService {
-  static int? _currentAlarmId;
+  static final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   
+  static bool _initialized = false;
+  static int _currentNotificationId = 0;
+
+  // مقداردهی اولیه
+  static Future<void> init() async {
+    if (_initialized) return;
+    
+    tz.initializeTimeZones();
+    
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidSettings);
+    
+    await _notifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) {
+        debugPrint('Notification tapped: ${details.payload}');
+      },
+    );
+    
+    // درخواست دسترسی نوتیفیکیشن (Android 13+)
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+    
+    // درخواست دسترسی آلارم دقیق (Android 12+)
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestExactAlarmsPermission();
+    
+    _initialized = true;
+  }
+
+  // تنظیم تایمر
   static Future<bool> setTimer({
     required int stepId,
     required int seconds,
@@ -11,77 +49,68 @@ class TimerService {
     required String stepDescription,
     VoidCallback? onAlarmRing,
   }) async {
-    if (_currentAlarmId != null) {
-      await stopTimer();
-    }
+    if (seconds <= 0) return false;
     
-    if (seconds <= 0) {
-      print('زمان تایمر صفر است، تنظیم نمیشود');
-      return false;
-    }
+    await init();
+    await stopTimer();
     
-    final scheduledTime = DateTime.now().add(Duration(seconds: seconds));
+    final scheduledTime = tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+    _currentNotificationId = stepId;
     
-    // ✅ نسخه درست بر اساس توضیحات VSCode
-    final alarmSettings = AlarmSettings(
-      id: stepId,
-      dateTime: scheduledTime,
-      assetAudioPath: 'assets/sounds/default_beep.mp3',  // ← اینجا assetAudioPath هست
-      notificationTitle: '⏰ زمان مرحله تموم شد!',
-      notificationBody: '$recipeName - $stepDescription',
-      loopAudio: true,
-      vibrate: true,
-      volume: 1.0,
-      fadeDuration: 0.0,
-      enableNotificationOnKill: true,  // ← اینجا enableNotificationOnKill هست
-      androidFullScreenIntent: true,
+    const androidDetails = AndroidNotificationDetails(
+      'cooking_timer_channel',
+      'تایمر پخت',
+      channelDescription: 'آلارم تایمر پخت غذا',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      category: AndroidNotificationCategory.alarm,
+      fullScreenIntent: true,
     );
     
-    _currentAlarmId = stepId;
+    const notificationDetails = NotificationDetails(android: androidDetails);
     
     try {
-      final isSet = await Alarm2.set(alarmSettings: alarmSettings);
+      await _notifications.zonedSchedule(
+        _currentNotificationId,
+        '⏰ زمان مرحله تموم شد!',
+        '$recipeName - $stepDescription',
+        scheduledTime,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'timer_done',
+      );
       
-      if (isSet) {
-        print('تایمر $seconds ثانیه برای مرحله $stepId تنظیم شد');
-      } else {
-        print('خطا در تنظیم تایمر');
-      }
-      
-      return isSet;
+      debugPrint('تایمر $seconds ثانیه تنظیم شد');
+      return true;
     } catch (e) {
-      print('خطا در تنظیم تایمر: $e');
+      debugPrint('خطا در تنظیم تایمر: $e');
       return false;
     }
   }
-  
+
+  // توقف تایمر
   static Future<void> stopTimer() async {
-    if (_currentAlarmId != null) {
-      try {
-        await Alarm2.stop(_currentAlarmId!);
-        _currentAlarmId = null;
-        print('تایمر متوقف شد');
-      } catch (e) {
-        print('خطا در توقف تایمر: $e');
-      }
+    if (_currentNotificationId != 0) {
+      await _notifications.cancel(_currentNotificationId);
+      _currentNotificationId = 0;
+      debugPrint('تایمر متوقف شد');
     }
   }
-  
+
+  // لغو همه تایمرها
   static Future<void> cancelAllTimers() async {
-    try {
-      await Alarm2.stopAll();
-      _currentAlarmId = null;
-      print('همه تایمرها لغو شدند');
-    } catch (e) {
-      print('خطا در لغو تایمرها: $e');
-    }
+    await _notifications.cancelAll();
+    _currentNotificationId = 0;
+    debugPrint('همه تایمرها لغو شدند');
   }
-  
+
   static bool isTimerActive() {
-    return _currentAlarmId != null;
+    return _currentNotificationId != 0;
   }
-  
+
   static int? getCurrentAlarmId() {
-    return _currentAlarmId;
+    return _currentNotificationId != 0 ? _currentNotificationId : null;
   }
 }

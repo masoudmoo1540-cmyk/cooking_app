@@ -6,6 +6,7 @@ import 'providers/recipe_provider.dart';
 import 'providers/sound_provider.dart';
 import 'services/database_service.dart';
 import 'services/sound_service.dart';
+import 'services/timer_service.dart';
 import 'views/home_view.dart';
 
 void main() async {
@@ -14,9 +15,12 @@ void main() async {
   // مقداردهی اولیه سرویس صدا
   await SoundService.init();
   
+  // مقداردهی اولیه سرویس تایمر (برای نوتیفیکیشن‌های پس‌زمینه)
+  await TimerService.init();
+  
   // مقداردهی اولیه دیتابیس (با shared_preferences)
   final dbService = DatabaseService();
-  await dbService.getAllRecipes(); // فقط برای اطمینان از اینکه دیتا لود شده
+  await dbService.getAllRecipes();
   
   runApp(const MyApp());
 }
@@ -42,11 +46,6 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'آشپزخانه من',
             debugShowCheckedModeBanner: false,
-            
-            // ✅ حذف locale و supportedLocales
-            // ❌ locale: const Locale('fa', 'IR'),
-            // ❌ supportedLocales: const [Locale('fa', 'IR')],
-            // ❌ localizationsDelegates: const [],
             
             theme: ThemeData(
               fontFamily: 'Vazirmatn',
@@ -108,7 +107,6 @@ class MyApp extends StatelessWidget {
               ),
             ),
             
-            // ✅ اینجا کل صفحه رو راست‌چین میکنه (بدون نیاز به locale)
             builder: (context, child) {
               return Directionality(
                 textDirection: TextDirection.rtl,
