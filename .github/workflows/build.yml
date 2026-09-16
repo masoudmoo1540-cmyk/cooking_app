@@ -24,18 +24,27 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
-      - name: Set compileSdk and minSdk
+      - name: Show build.gradle.kts
+        run: cat android/app/build.gradle.kts
+
+      - name: Force compileSdk 36
         run: |
-          echo "=== BEFORE ==="
-          cat android/app/build.gradle.kts
-          echo "=== AFTER ==="
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle.kts
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/g' android/app/build.gradle.kts
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts
-          sed -i 's/minSdkVersion .*/minSdkVersion 21/g' android/app/build.gradle.kts
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle.kts
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/g' android/app/build.gradle.kts
-          cat android/app/build.gradle.kts
+          python3 - <<'EOF'
+          import re
+          path = "android/app/build.gradle.kts"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+          content = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', content)
+          content = re.sub(r'compileSdkVersion\s*[^\n]+', 'compileSdkVersion 36', content)
+          content = re.sub(r'minSdk\s*=\s*[^\n]+', 'minSdk = 21', content)
+          content = re.sub(r'minSdkVersion\s*[^\n]+', 'minSdkVersion 21', content)
+          content = re.sub(r'targetSdk\s*=\s*[^\n]+', 'targetSdk = 36', content)
+          content = re.sub(r'targetSdkVersion\s*[^\n]+', 'targetSdkVersion 36', content)
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+          print("=== AFTER ===")
+          print(content)
+          EOF
 
       - name: Get dependencies
         run: flutter pub get
