@@ -24,6 +24,42 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
+      - name: Force subprojects compileSdk 36
+        run: |
+          python3 - <<'EOF'
+          path = "android/build.gradle.kts"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+          
+          patch = '''
+          subprojects {
+              afterEvaluate {
+                  if (project.hasProperty("android")) {
+                      val androidExt = project.extensions.findByName("android")
+                      if (androidExt != null) {
+                          try {
+                              val setCompileSdk = androidExt.javaClass.getMethod("setCompileSdkVersion", Int::class.javaPrimitiveType)
+                              setCompileSdk.invoke(androidExt, 36)
+                          } catch (e: Exception) {}
+                          try {
+                              val setCompileSdkStr = androidExt.javaClass.getMethod("setCompileSdkVersion", String::class.java)
+                              setCompileSdkStr.invoke(androidExt, "android-36")
+                          } catch (e: Exception) {}
+                      }
+                  }
+              }
+          }
+          '''
+          
+          if "subprojects {" not in content:
+              content = content + "\n" + patch
+          
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+          print("=== android/build.gradle.kts AFTER ===")
+          print(content)
+          EOF
+
       - name: Patch AndroidManifest permissions
         run: |
           python3 - <<'EOF'
@@ -46,10 +82,9 @@ jobs:
           with open(path, "w", encoding="utf-8") as f:
               f.write(content)
           print("AndroidManifest patched")
-          print(content)
           EOF
 
-      - name: Patch build.gradle.kts
+      - name: Patch app build.gradle.kts
         run: |
           python3 - <<'EOF'
           import re
@@ -57,13 +92,9 @@ jobs:
           with open(path, "r", encoding="utf-8") as f:
               content = f.read()
           
-          # compileSdk = 36
           content = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', content)
-          
-          # minSdk = 21
           content = re.sub(r'minSdk\s*=\s*[^\n]+', 'minSdk = 21', content)
           
-          # فعال‌سازی core library desugaring
           if "isCoreLibraryDesugaringEnabled" not in content:
               content = content.replace(
                   'android {',
@@ -76,13 +107,12 @@ jobs:
                   1
               )
           
-          # اضافه کردن dependency به آخر فایل
           if "desugar_jdk_libs" not in content:
               content = content + '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
           
           with open(path, "w", encoding="utf-8") as f:
               f.write(content)
-          print("=== build.gradle.kts AFTER ===")
+          print("=== app build.gradle.kts AFTER ===")
           print(content)
           EOF
 
