@@ -33,17 +33,35 @@ class SoundService {
     final pathToPlay = soundPath ?? _selectedSoundPath;
     
     try {
-      if (pathToPlay != null && File(pathToPlay).existsSync()) {
-        await _audioPlayer.stop();
+      await _audioPlayer.stop();
+      
+      // اگه مسیر asset هست، از setAsset استفاده کن
+      if (pathToPlay != null && pathToPlay.startsWith('assets/')) {
+        // حذف پیشوند assets/ چون setAsset خودش اضافه می‌کنه
+        final assetPath = pathToPlay.replaceFirst('assets/', '');
+        await _audioPlayer.setAsset('assets/$assetPath');
+        await _audioPlayer.play();
+      } 
+      // اگه مسیر فایل واقعی هست و وجود داره، از setFilePath
+      else if (pathToPlay != null && File(pathToPlay).existsSync()) {
         await _audioPlayer.setFilePath(pathToPlay);
         await _audioPlayer.play();
-      } else {
-        await _audioPlayer.stop();
+      } 
+      // در غیر این صورت، آهنگ پیش‌فرض
+      else {
         await _audioPlayer.setAsset('assets/sounds/classic.mp3');
         await _audioPlayer.play();
       }
     } catch (e) {
       print('خطا در پخش صدا: $e');
+      // تلاش برای پخش آهنگ پیش‌فرض
+      try {
+        await _audioPlayer.stop();
+        await _audioPlayer.setAsset('assets/sounds/classic.mp3');
+        await _audioPlayer.play();
+      } catch (e2) {
+        print('خطا در پخش آهنگ پیش‌فرض: $e2');
+      }
     }
   }
   

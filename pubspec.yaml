@@ -29,7 +29,10 @@ flutter:
     - assets/fonts/
     - assets/sounds/
     - assets/help/
+    - assets/backgrounds/
     - assets/backgrounds/default/
+    - assets/backgrounds/user/
+    - assets/images/
   fonts:
     - family: Vazirmatn
       fonts:

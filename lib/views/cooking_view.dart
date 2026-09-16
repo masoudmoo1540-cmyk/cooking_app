@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/theme_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/sound_provider.dart';
@@ -35,6 +36,9 @@ class _CookingViewState extends State<CookingView> {
   Timer? _countdownTimer;
   bool _timerShouldStop = false;
   
+  // ← جدید: برای حفظ تایمر در هنگام خروج
+  bool _keepTimerOnExit = false;
+  
   @override
   void initState() {
     super.initState();
@@ -43,13 +47,27 @@ class _CookingViewState extends State<CookingView> {
   
   @override
   void dispose() {
-    _stopTimer();
-    TimerService.cancelAllTimers();
-    SoundService.stopAlarm();
+    // ← تغییر: اگه کاربر خواسته تایمر حفظ بشه، پاکش نکن
+    if (!_keepTimerOnExit) {
+      _stopTimer();
+      TimerService.cancelAllTimers();
+      SoundService.stopAlarm();
+    } else {
+      // فقط تایمر UI رو متوقف کن، ولی تایمر پس‌زمینه (TimerService) بمونه
+      _countdownTimer?.cancel();
+      _timerShouldStop = true;
+    }
     super.dispose();
   }
   
   Future<void> _loadRecipeDetails() async {
+    // ← جدید: چک کن آیا قبلاً یه پخت در جریان بوده
+    final prefs = await SharedPreferences.getInstance();
+    final savedRecipeId = prefs.getInt('active_cooking_recipe_id');
+    final savedStep = prefs.getInt('active_cooking_step');
+    final savedRemaining = prefs.getInt('active_cooking_remaining');
+    final savedTimestamp = prefs.getInt('active_cooking_timestamp');
+    
     final data = await _dbService.getRecipeDetails(widget.recipeId);
     final recipe = data['recipe'];
     
@@ -59,31 +77,69 @@ class _CookingViewState extends State<CookingView> {
         final stepsData = data['steps'] as List;
         _steps = stepsData.map((s) => s['description'] as String).toList();
         _timers = stepsData.map((s) => s['timer_minutes'] as int? ?? 0).toList();
+        
+        // ← جدید: اگه همین غذا و همون پخت قبلی بوده، بازیابی کن
+        if (savedRecipeId == widget.recipeId && savedStep != null) {
+          _currentStep = savedStep;
+          
+          // محاسبه زمان سپری شده از وقتی که خارج شدی
+          if (savedRemaining != null && savedTimestamp != null) {
+            final elapsed = (DateTime.now().millisecondsSinceEpoch - savedTimestamp) ~/ 1000;
+            final newRemaining = savedRemaining - elapsed;
+            if (newRemaining > 0) {
+              _remainingSeconds = newRemaining;
+            }
+          }
+        }
       });
+      
       _updateStepDisplay();
     }
   }
   
+  // ← جدید: ذخیره وضعیت پخت قبل از خروج
+  Future<void> _saveCookingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('active_cooking_recipe_id', widget.recipeId);
+    await prefs.setInt('active_cooking_step', _currentStep);
+    await prefs.setInt('active_cooking_remaining', _remainingSeconds);
+    await prefs.setInt('active_cooking_timestamp', DateTime.now().millisecondsSinceEpoch);
+  }
+  
+  // ← جدید: پاک کردن وضعیت پخت
+  Future<void> _clearCookingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('active_cooking_recipe_id');
+    await prefs.remove('active_cooking_step');
+    await prefs.remove('active_cooking_remaining');
+    await prefs.remove('active_cooking_timestamp');
+  }
+  
   void _showExitDialog() {
     SoundService.stopAlarm();
-    _stopTimer();
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('آیا از پخت غذا منصرف شدی؟'),
+        title: const Text('از پخت غذا خارج می‌شی؟'),
         content: Text(
           'مرحله ${_currentStep + 1} از ${_steps.length}.\n'
           'زمان باقی مونده: ${formatTime(_remainingSeconds)}',
         ),
         actions: [
+          // دکمه ۱: لغو کامل (تایمر پاک می‌شه)
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              _keepTimerOnExit = false;
+              _clearCookingState();
+              _stopTimer();
+              TimerService.cancelAllTimers();
+              Navigator.pop(context); // بستن dialog
+              Navigator.pop(context); // خروج از صفحه
             },
-            child: const Text('❌ بله، لغو کن'),
+            child: const Text('❌ لغو کامل'),
           ),
+          // دکمه ۲: ادامه پخت (بمون توی صفحه)
           TextButton(
             onPressed: () {
               Navigator.pop(context);
@@ -91,7 +147,17 @@ class _CookingViewState extends State<CookingView> {
                 const SnackBar(content: Text('🔙 پخت ادامه پیدا میکنه...'), duration: Duration(seconds: 2)),
               );
             },
-            child: const Text('🔙 نه، ادامه بدم'),
+            child: const Text('🔙 ادامه بدم'),
+          ),
+          // ← دکمه ۳ (جدید): خروج ولی تایمر فعال بمونه
+          TextButton(
+            onPressed: () async {
+              _keepTimerOnExit = true;
+              await _saveCookingState();
+              Navigator.pop(context); // بستن dialog
+              Navigator.pop(context); // خروج از صفحه
+            },
+            child: const Text('⏱️ خروج با حفظ تایمر'),
           ),
         ],
       ),
@@ -103,7 +169,10 @@ class _CookingViewState extends State<CookingView> {
       final timerSeconds = _timers[_currentStep];
       
       if (timerSeconds > 0) {
-        _remainingSeconds = timerSeconds;
+        // ← تغییر: اگه _remainingSeconds قبلاً ست شده (از بازیابی)، ازش استفاده کن
+        if (_remainingSeconds <= 0) {
+          _remainingSeconds = timerSeconds;
+        }
         setState(() {});
         _startTimer();
       } else {
@@ -120,16 +189,14 @@ class _CookingViewState extends State<CookingView> {
   void _startTimer() {
     if (_timerRunning) return;
     
-    final timerSeconds = _timers[_currentStep];
-    if (timerSeconds > 0) {
+    if (_remainingSeconds > 0) {
       _timerRunning = true;
       _timerShouldStop = false;
-      _remainingSeconds = timerSeconds;
       
-      // تنظیم تایمر پس‌زمینه با alarm2
+      // تنظیم تایمر پس‌زمینه
       TimerService.setTimer(
         stepId: _currentStep,
-        seconds: timerSeconds,
+        seconds: _remainingSeconds,
         recipeName: _recipeName,
         stepDescription: _steps[_currentStep],
         onAlarmRing: () {
@@ -173,7 +240,6 @@ class _CookingViewState extends State<CookingView> {
     
     setState(() {});
     
-    // پخش صدای آلارم
     SoundService.playAlarmSound();
     
     if (mounted) {
@@ -206,11 +272,13 @@ class _CookingViewState extends State<CookingView> {
     
     _stopTimer();
     _currentStep++;
+    _remainingSeconds = 0;
     _updateStepDisplay();
   }
   
   void _finishCooking() async {
     SoundService.stopAlarm();
+    await _clearCookingState(); // ← پاک کردن وضعیت پخت
     await _dbService.updateLastCooked(widget.recipeId);
     
     if (mounted) {
@@ -245,7 +313,6 @@ class _CookingViewState extends State<CookingView> {
           child: Column(
             children: [
               const SizedBox(height: 10),
-              // هدر
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
@@ -266,10 +333,8 @@ class _CookingViewState extends State<CookingView> {
                 ),
               ),
               const Divider(height: 10, color: Colors.transparent),
-              // آیکون غذا
               Icon(Icons.restaurant_menu, size: 40, color: primaryColor),
               const SizedBox(height: 5),
-              // نوار پیشرفت
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -293,7 +358,6 @@ class _CookingViewState extends State<CookingView> {
                 ),
               ),
               const SizedBox(height: 15),
-              // کارت مرحله جاری
               Card(
                 elevation: 3,
                 margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -316,7 +380,6 @@ class _CookingViewState extends State<CookingView> {
                   ),
                 ),
               ),
-              // کارت تایمر
               Card(
                 elevation: 2,
                 margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
@@ -328,7 +391,6 @@ class _CookingViewState extends State<CookingView> {
                   ),
                 ),
               ),
-              // دکمه توقف تایمر (فقط در صورت وجود تایمر)
               if (hasTimer && _timerRunning)
                 ElevatedButton.icon(
                   onPressed: _stopTimerEarly,
@@ -341,7 +403,6 @@ class _CookingViewState extends State<CookingView> {
                   ),
                 ),
               const SizedBox(height: 15),
-              // دکمه مرحله بعد
               ElevatedButton.icon(
                 onPressed: _nextStep,
                 icon: const Icon(Icons.navigate_next, size: 18, color: Colors.white),

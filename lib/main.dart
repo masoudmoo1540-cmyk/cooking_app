@@ -7,6 +7,7 @@ import 'providers/sound_provider.dart';
 import 'services/database_service.dart';
 import 'services/sound_service.dart';
 import 'services/timer_service.dart';
+import 'services/meal_suggestion_service.dart';
 import 'views/home_view.dart';
 
 void main() async {
@@ -14,6 +15,7 @@ void main() async {
   
   await SoundService.init();
   await TimerService.init();
+  await MealSuggestionService.init();
   
   final dbService = DatabaseService();
   await dbService.getAllRecipes();

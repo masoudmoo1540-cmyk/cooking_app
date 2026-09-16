@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,14 +18,20 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
   String? _selectedBackground;
   final ImagePicker _imagePicker = ImagePicker();
   
-  // لیست عکس‌ها (ذخیره در SharedPreferences)
   List<Map<String, dynamic>> _images = [];
   
-  // عکس‌های پیش‌فرض (به صورت硬کد)
+  // عکس‌های پیش‌فرض (فایل‌های واقعی موجود در پروژه)
   final List<Map<String, dynamic>> _defaultImages = [
-    {'name': 'غذا 1', 'path': 'assets/backgrounds/default/food1.jpg', 'isDefault': true},
-    {'name': 'غذا 2', 'path': 'assets/backgrounds/default/food2.jpg', 'isDefault': true},
-    {'name': 'غذا 3', 'path': 'assets/backgrounds/default/food3.jpg', 'isDefault': true},
+    {'name': 'غذای ایرانی', 'path': 'assets/backgrounds/default/ghormeh-sabzi-300x200-c.jpg', 'isDefault': true},
+    {'name': 'زرشک پلو', 'path': 'assets/backgrounds/default/zereshk-polo.jpg', 'isDefault': true},
+    {'name': 'آشپزخانه مدرن', 'path': 'assets/backgrounds/default/kitchen-decoration-hacks.jpg', 'isDefault': true},
+    {'name': 'دکوراسیون', 'path': 'assets/backgrounds/default/IMG_20250721_101532_237.jpg', 'isDefault': true},
+    {'name': 'آشپزخانه', 'path': 'assets/backgrounds/default/IMG_20250721_101555_810.jpg', 'isDefault': true},
+    {'name': 'چیدمان', 'path': 'assets/backgrounds/default/IMG_20250721_101551_940.jpg', 'isDefault': true},
+    {'name': 'غذای خوشمزه', 'path': 'assets/backgrounds/default/IMG_20211021_065107_877.jpg', 'isDefault': true},
+    {'name': 'غذا ۱', 'path': 'assets/backgrounds/default/1030172951432393.jpg', 'isDefault': true},
+    {'name': 'غذا', 'path': 'assets/backgrounds/default/IMG_20210604_090521_516.jpg', 'isDefault': true},
+    {'name': 'آشپزخانه کوچک', 'path': 'assets/backgrounds/default/IMG_20210704_131759_409.jpg', 'isDefault': true},
   ];
   
   @override
@@ -58,11 +65,8 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
     final imagesJson = prefs.getString('background_images');
     
     List<Map<String, dynamic>> allImages = [];
-    
-    // اضافه کردن عکس‌های پیش‌فرض
     allImages.addAll(_defaultImages);
     
-    // اضافه کردن عکس‌های کاربر
     if (imagesJson != null) {
       try {
         final userImages = List<Map<String, dynamic>>.from(jsonDecode(imagesJson));
@@ -85,15 +89,12 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
   Future<void> _pickImage() async {
     final XFile? result = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (result != null) {
-      // برای وب، فقط مسیر رو ذخیره میکنیم
-      // برای موبایل، میتونیم فایل رو کپی کنیم
       final newImage = {
         'name': result.name,
         'path': result.path,
         'isDefault': false,
       };
       
-      // گرفتن لیست عکس‌های کاربر
       final prefs = await SharedPreferences.getInstance();
       final imagesJson = prefs.getString('background_images');
       List<Map<String, dynamic>> userImages = [];
@@ -168,7 +169,6 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
     final textColor = colors['text_color'] as Color;
     final cardBg = colors['card_bg'] as Color;
     
-    // فیلتر کردن عکس‌ها برای نمایش
     final displayImages = _images;
     
     return BackgroundImage(
@@ -195,7 +195,6 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
               ),
               const SizedBox(height: 16),
               
-              // لیست عکس‌ها
               if (displayImages.isNotEmpty)
                 ...displayImages.map((img) => _buildImageItem(
                       img['name']!,
@@ -207,14 +206,13 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
                     ))
               else
                 Center(
-                  child: Text('هیچ عکسی یافت نشد. برای افزودن عکس از دکمه زیر استفاده کن.',
+                  child: Text('هیچ عکسی یافت نشد.',
                       style: TextStyle(color: Colors.grey[500], fontSize: 14),
                       textAlign: TextAlign.center),
                 ),
               
               const SizedBox(height: 20),
               
-              // دکمه افزودن عکس
               ElevatedButton.icon(
                 onPressed: _pickImage,
                 icon: const Icon(Icons.upload_file, size: 18),
@@ -229,7 +227,6 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
               
               const SizedBox(height: 12),
               
-              // دکمه ریست
               ElevatedButton.icon(
                 onPressed: _resetBackground,
                 icon: const Icon(Icons.restore, size: 18),
@@ -265,7 +262,6 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
         ),
         child: Row(
           children: [
-            // نمایش تصویر
             Container(
               width: 50,
               height: 50,
@@ -285,8 +281,8 @@ class _BackgroundSettingsViewState extends State<BackgroundSettingsView> {
                           return Icon(Icons.image, size: 30, color: Colors.grey[600]);
                         },
                       )
-                    : Image.network(
-                        path,
+                    : Image.file(
+                        File(path),
                         width: 50,
                         height: 50,
                         fit: BoxFit.cover,
