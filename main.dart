@@ -12,13 +12,9 @@ import 'views/home_view.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // مقداردهی اولیه سرویس صدا
   await SoundService.init();
-  
-  // مقداردهی اولیه سرویس تایمر (برای نوتیفیکیشن‌های پس‌زمینه)
   await TimerService.init();
   
-  // مقداردهی اولیه دیتابیس (با shared_preferences)
   final dbService = DatabaseService();
   await dbService.getAllRecipes();
   
@@ -46,7 +42,6 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'آشپزخانه من',
             debugShowCheckedModeBanner: false,
-            
             theme: ThemeData(
               fontFamily: 'Vazirmatn',
               useMaterial3: true,
@@ -106,14 +101,12 @@ class MyApp extends StatelessWidget {
                 titleMedium: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
-            
             builder: (context, child) {
               return Directionality(
                 textDirection: TextDirection.rtl,
                 child: child ?? Container(),
               );
             },
-            
             home: const HomeView(),
           );
         },
