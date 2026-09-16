@@ -24,6 +24,16 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
+      - name: Fix compileSdkVersion
+        run: |
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
+          sed -i 's/compileSdk .*/compileSdk 34/' android/app/build.gradle
+          sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle
+          sed -i 's/minSdk .*/minSdk 21/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
+          sed -i 's/targetSdk .*/targetSdk 34/' android/app/build.gradle
+          cat android/app/build.gradle
+
       - name: Get dependencies
         run: flutter pub get
 
