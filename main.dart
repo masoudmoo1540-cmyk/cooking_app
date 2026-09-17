@@ -8,7 +8,9 @@ import 'services/database_service.dart';
 import 'services/sound_service.dart';
 import 'services/timer_service.dart';
 import 'services/meal_suggestion_service.dart';
+import 'services/permission_service.dart';
 import 'views/home_view.dart';
+import 'views/permission_setup_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,10 +111,58 @@ class MyApp extends StatelessWidget {
                 child: child ?? Container(),
               );
             },
-            home: const HomeView(),
+            home: const _AppEntryPoint(),
           );
         },
       ),
     );
+  }
+}
+
+class _AppEntryPoint extends StatefulWidget {
+  const _AppEntryPoint();
+
+  @override
+  State<_AppEntryPoint> createState() => _AppEntryPointState();
+}
+
+class _AppEntryPointState extends State<_AppEntryPoint> {
+  bool _loading = true;
+  bool _setupDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final done = await PermissionService.isSetupDone();
+    if (!mounted) return;
+    setState(() {
+      _setupDone = done;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (!_setupDone) {
+      return PermissionSetupView(
+        onFinished: () {
+          setState(() {
+            _setupDone = true;
+          });
+        },
+      );
+    }
+    
+    return const HomeView();
   }
 }
