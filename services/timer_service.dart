@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -54,8 +53,6 @@ class TimerService {
     final scheduledTime = tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
     _currentNotificationId = stepId;
     
-    // ⭐ صدا از raw resource پخش می‌شه + لوپ می‌شه
-    // ⚠️ const حذف شد چون additionalFlags قابل const نیست
     final androidDetails = AndroidNotificationDetails(
       'cooking_timer_channel',
       'تایمر پخت',
@@ -67,7 +64,6 @@ class TimerService {
       enableVibration: true,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
-      additionalFlags: Int32List.fromList([4]),
       ongoing: false,
       autoCancel: true,
     );
