@@ -24,6 +24,12 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
+      - name: Copy alarm sound to raw resources
+        run: |
+          mkdir -p android/app/src/main/res/raw
+          cp assets/sounds/classic.mp3 android/app/src/main/res/raw/alarm_sound.mp3
+          ls -la android/app/src/main/res/raw/
+
       - name: Patch AndroidManifest permissions and receivers
         run: |
           python3 - <<'EOF'
@@ -39,6 +45,9 @@ jobs:
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.VIBRATE"/>
               <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+              <uses-permission android:name="android.permission.TURN_SCREEN_ON"/>
+              <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
           '''
           
           if "SCHEDULE_EXACT_ALARM" not in content:

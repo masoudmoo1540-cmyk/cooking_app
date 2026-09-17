@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -10,7 +11,6 @@ class TimerService {
   static bool _initialized = false;
   static int _currentNotificationId = 0;
 
-  // مقداردهی اولیه
   static Future<void> init() async {
     if (_initialized) return;
     
@@ -26,13 +26,11 @@ class TimerService {
       },
     );
     
-    // درخواست دسترسی نوتیفیکیشن (Android 13+)
     await _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
     
-    // درخواست دسترسی آلارم دقیق (Android 12+)
     await _notifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -41,7 +39,6 @@ class TimerService {
     _initialized = true;
   }
 
-  // تنظیم تایمر
   static Future<bool> setTimer({
     required int stepId,
     required int seconds,
@@ -57,6 +54,7 @@ class TimerService {
     final scheduledTime = tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
     _currentNotificationId = stepId;
     
+    // ⭐ صدا از raw resource پخش می‌شه + لوپ می‌شه
     const androidDetails = AndroidNotificationDetails(
       'cooking_timer_channel',
       'تایمر پخت',
@@ -64,9 +62,13 @@ class TimerService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('alarm_sound'),
       enableVibration: true,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
+      additionalFlags: Int32List.fromList([4]),
+      ongoing: false,
+      autoCancel: true,
     );
     
     const notificationDetails = NotificationDetails(android: androidDetails);
@@ -90,7 +92,6 @@ class TimerService {
     }
   }
 
-  // توقف تایمر
   static Future<void> stopTimer() async {
     if (_currentNotificationId != 0) {
       await _notifications.cancel(_currentNotificationId);
@@ -99,7 +100,6 @@ class TimerService {
     }
   }
 
-  // لغو همه تایمرها
   static Future<void> cancelAllTimers() async {
     await _notifications.cancelAll();
     _currentNotificationId = 0;
