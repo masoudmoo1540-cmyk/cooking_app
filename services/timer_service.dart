@@ -55,14 +55,15 @@ class TimerService {
     _currentNotificationId = stepId;
     
     // ⭐ صدا از raw resource پخش می‌شه + لوپ می‌شه
-    const androidDetails = AndroidNotificationDetails(
+    // ⚠️ const حذف شد چون additionalFlags قابل const نیست
+    final androidDetails = AndroidNotificationDetails(
       'cooking_timer_channel',
       'تایمر پخت',
       channelDescription: 'آلارم تایمر پخت غذا',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('alarm_sound'),
+      sound: const RawResourceAndroidNotificationSound('alarm_sound'),
       enableVibration: true,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
@@ -71,7 +72,7 @@ class TimerService {
       autoCancel: true,
     );
     
-    const notificationDetails = NotificationDetails(android: androidDetails);
+    final notificationDetails = NotificationDetails(android: androidDetails);
     
     try {
       await _notifications.zonedSchedule(
