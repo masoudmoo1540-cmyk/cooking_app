@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/sound_provider.dart';
@@ -84,20 +85,33 @@ class _SoundSettingsViewState extends State<SoundSettingsView> {
     
     if (result != null && result.files.single.path != null) {
       final sourcePath = result.files.single.path!;
-      final fileName = result.files.single.name;
-      final destPath = '$_soundsDirUser$fileName';
+      final originalName = result.files.single.name;
       
-      // در نسخه واقعی باید فایل رو کپی کنی
-      // اینجا فقط مسیر رو ذخیره میکنیم
+      // فایل رو واقعاً به یه مسیر دائمی داخل اپ کپی می‌کنیم (نه مسیر موقت پیکر)
+      final appDir = await getApplicationDocumentsDirectory();
+      final soundsDir = Directory('${appDir.path}/custom_sounds');
+      if (!await soundsDir.exists()) {
+        await soundsDir.create(recursive: true);
+      }
+      
+      // اسم فایل با timestamp یکتا می‌شه: هر آپلود جدید = یه کانال نوتیفیکیشن
+      // جدا با صدای درست خودش (چون صدای هر کانال بعد از ساخته شدن قفل می‌شه)
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = originalName.contains('.') ? originalName.split('.').last : 'mp3';
+      final destPath = '${soundsDir.path}/custom_$timestamp.$ext';
+      
+      await File(sourcePath).copy(destPath);
       
       setState(() {
-        _selectedSound = sourcePath;
+        _selectedSound = destPath;
       });
       await _saveSettings();
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ فایل $fileName اضافه شد'), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ فایل $originalName اضافه شد'), backgroundColor: Colors.green),
+        );
+      }
     }
   }
   

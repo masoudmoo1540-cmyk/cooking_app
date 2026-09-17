@@ -24,13 +24,80 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --org com.example --project-name cooking_app .
 
-      - name: Copy alarm sound to raw resources
+      - name: Copy alarm sounds to raw resources
         run: |
           mkdir -p android/app/src/main/res/raw
-          cp assets/sounds/classic.mp3 android/app/src/main/res/raw/alarm_sound.mp3
+          cp assets/sounds/classic.mp3 android/app/src/main/res/raw/classic.mp3
+          cp assets/sounds/gentle.mp3 android/app/src/main/res/raw/gentle.mp3
+          cp assets/sounds/kitchen.mp3 android/app/src/main/res/raw/kitchen.mp3
           ls -la android/app/src/main/res/raw/
 
-      - name: Patch AndroidManifest permissions and receivers
+      - name: Create file_paths.xml
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml <<'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path name="custom_sounds" path="custom_sounds/" />
+          </paths>
+          XMLEOF
+          cat android/app/src/main/res/xml/file_paths.xml
+
+      - name: Patch MainActivity.kt
+        run: |
+          MAIN_ACTIVITY=$(find android/app/src/main/kotlin -name "MainActivity.kt")
+          echo "Found: $MAIN_ACTIVITY"
+          PACKAGE_NAME=$(grep "^package " "$MAIN_ACTIVITY" | sed 's/package //')
+          echo "Package: $PACKAGE_NAME"
+          cat > "$MAIN_ACTIVITY" <<EOF
+          package $PACKAGE_NAME
+
+          import androidx.core.content.FileProvider
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          import java.io.File
+
+          class MainActivity : FlutterActivity() {
+              private val CHANNEL = "app.custom_sound/file_provider"
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+                      .setMethodCallHandler { call, result ->
+                          if (call.method == "getUriForFile") {
+                              val path = call.argument<String>("path")
+                              if (path == null) {
+                                  result.error("NO_PATH", "path is null", null)
+                                  return@setMethodCallHandler
+                              }
+                              try {
+                                  val file = File(path)
+                                  val uri = FileProvider.getUriForFile(
+                                      applicationContext,
+                                      "\${applicationContext.packageName}.fileprovider",
+                                      file
+                                  )
+                                  grantUriPermission(
+                                      "android",
+                                      uri,
+                                      android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                  )
+                                  result.success(uri.toString())
+                              } catch (e: Exception) {
+                                  result.error("URI_ERROR", e.message, null)
+                              }
+                          } else {
+                              result.notImplemented()
+                          }
+                      }
+              }
+          }
+          EOF
+          cat "$MAIN_ACTIVITY"
+
+      - name: Patch AndroidManifest permissions, receivers, and provider
         run: |
           python3 - <<'EOF'
           path = "android/app/src/main/AndroidManifest.xml"
@@ -44,16 +111,22 @@ jobs:
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.VIBRATE"/>
               <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
-              <uses-permission android:name="android.permission.TURN_SCREEN_ON"/>
-              <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
           '''
           
           if "SCHEDULE_EXACT_ALARM" not in content:
               idx = content.find('>')
               content = content[:idx+1] + '\n' + permissions + content[idx+1:]
           
-          receivers = '''
+          extras = '''
+              <provider
+                  android:name="androidx.core.content.FileProvider"
+                  android:authorities="${applicationId}.fileprovider"
+                  android:exported="false"
+                  android:grantUriPermissions="true">
+                  <meta-data
+                      android:name="android.support.FILE_PROVIDER_PATHS"
+                      android:resource="@xml/file_paths" />
+              </provider>
               <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
               <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
                   <intent-filter>
@@ -65,13 +138,14 @@ jobs:
               </receiver>
           '''
           
-          if "ScheduledNotificationBootReceiver" not in content:
+          if "FileProvider" not in content:
               idx2 = content.rfind('</application>')
-              content = content[:idx2] + receivers + content[idx2:]
+              content = content[:idx2] + extras + content[idx2:]
           
           with open(path, "w", encoding="utf-8") as f:
               f.write(content)
           print("AndroidManifest patched")
+          print(content)
           EOF
 
       - name: Patch app build.gradle.kts
